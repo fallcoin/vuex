@@ -6,6 +6,13 @@ class ModuleCollection {
         // 前序遍历
         this.register([], options);
     }
+    getNamespaced(path) {
+        let root = this.root;
+        return path.reduce((str, key) => {
+            root = root.getChild(key);
+            return (str + root.namespaced ? key + '/' : '');
+        }, '');
+    }
     register(path, rootModule) {
         const newModule = new Module();
         if (path.length == 0) {

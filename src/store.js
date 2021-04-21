@@ -4,6 +4,12 @@ import { forEachValue } from "./util"
 
 export let Vue;
 
+function getState(store, path) {    // 获取最新的状态
+    return path.reduce((newState, current) => {
+        return newState[current];
+    }, store.state);
+}
+
 const installModule = (store, rootState, path, module) => {
     const namespace = store._modules.getNamespaced(path);
 
@@ -24,7 +30,10 @@ const installModule = (store, rootState, path, module) => {
             store._mutations = [];
         }
         store._mutations[namespace + key].push(payload => {
-            mutation.call(store, module.state, payload);
+            mutation.call(store, getState(store, path), payload);
+            store._subscribes.forEach(fn => {
+                fn(mutation, store.state);
+            })
         })
     })
     // 处理actions
@@ -39,7 +48,7 @@ const installModule = (store, rootState, path, module) => {
     // 处理getters
     module.forEachGetter((getter, key) => {
         store._wrappedGetters[namespace + key] = function () {
-            return getter(module.state);
+            return getter(getState(store, path));
         }
     })
     // 安装子模块的属性
@@ -73,6 +82,7 @@ export class Store {
         this._actions = {};
         this._mutations = {};
         this._wrappedGetters = {};
+        this._subscribes = [];
 
         const state = options.state;
         // 构造ast树
@@ -81,6 +91,16 @@ export class Store {
         installModule(this, state, [], this._modules.root);
         // 将状态挂载到vm上
         ressetStoreVM(this, state);
+        // 让插件依次执行
+        options.plugins.forEach(plugin => plugin(this));
+    }
+
+    replaceState(state) {
+        this._vm.data.$$state = state;
+    }
+
+    subscribe(fn) {
+        this._subscribes.push(fn);
     }
 
     commit = (type, payload) => {    // 使用箭头函数能保证this的指向，因为用户可能把commit解构出来
